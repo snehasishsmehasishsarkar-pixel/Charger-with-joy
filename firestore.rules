@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Catch-all deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'displayName', 'email', 'photoURL', 'lastSeen']) &&
+               data.keys().size() == 5 &&
+               data.uid == request.auth.uid &&
+               data.displayName is string && data.displayName.size() <= 100 &&
+               data.email == request.auth.token.email &&
+               data.photoURL is string && (data.photoURL.size() <= 500 || data.photoURL == null) &&
+               data.lastSeen == request.time;
+      }
+
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidUser(incoming());
+      allow update: if isVerified() && isOwner(userId) && isValidUser(incoming());
+    }
+
+    // Chat Rooms
+    match /rooms/{roomId} {
+      function isParticipant() {
+        return isSignedIn() && request.auth.uid in existing().participants;
+      }
+      
+      function isValidRoom(data) {
+        return data.keys().hasAll(['participants', 'updatedAt']) &&
+               data.participants is list && data.participants.size() >= 1 &&
+               data.updatedAt == request.time;
+      }
+
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow get: if isParticipant();
+      allow create: if isVerified() && request.auth.uid in incoming().participants && isValidRoom(incoming());
+      allow update: if isParticipant() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt']) &&
+        incoming().updatedAt == request.time
+      );
+    }
+
+    // Messages subcollection
+    match /rooms/{roomId}/messages/{messageId} {
+      function isParticipantOfRoom() {
+        return isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.participants;
+      }
+
+      function isValidMessage(data) {
+        return data.keys().hasAll(['senderId', 'text', 'createdAt']) &&
+               data.keys().size() >= 3 &&
+               data.senderId == request.auth.uid &&
+               data.text is string && data.text.size() <= 5000 &&
+               data.createdAt == request.time;
+      }
+
+      allow read: if isParticipantOfRoom();
+      allow create: if isVerified() && isParticipantOfRoom() && isValidMessage(incoming());
+    }
+
+    // Typing status subcollection
+    match /rooms/{roomId}/typing/{userId} {
+      function isParticipantOfRoom() {
+        return isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.participants;
+      }
+
+      allow read: if isParticipantOfRoom();
+      allow write: if isVerified() && isOwner(userId) && isParticipantOfRoom() && 
+                    incoming().keys().hasAll(['isTyping', 'updatedAt']) &&
+                    incoming().keys().size() == 2 &&
+                    incoming().isTyping is bool &&
+                    incoming().updatedAt == request.time;
+    }
+  }
+}

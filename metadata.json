@@ -1,0 +1,6 @@
+{
+  "name": "NeonChat",
+  "description": "A sleek, dark-mode mobile chat app with neon accents and real-time messaging powered by Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

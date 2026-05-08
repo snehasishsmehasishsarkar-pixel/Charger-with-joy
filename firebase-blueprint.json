@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "email": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "ChatRoom": {
+      "title": "Chat Room",
+      "description": "A conversation between two or more users",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message within a chat room",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "attachments": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["senderId", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    },
+    "rooms": {
+      "schema": "ChatRoom",
+      "description": "Collection of chat rooms"
+    },
+    "rooms/{roomId}/messages": {
+      "schema": "Message",
+      "description": "Subcollection of messages for a specific room"
+    },
+    "rooms/{roomId}/typing/{userId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "isTyping": { "type": "boolean" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["isTyping", "updatedAt"]
+      },
+      "description": "Typing status of a user in a room"
+    }
+  }
+}
